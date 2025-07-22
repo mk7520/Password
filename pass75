@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+
+import sys
+import random
+import string
+
+def generate_password(pattern):
+    password = ""
+    for ch in pattern:
+        if ch == 'a':
+            password += random.choice(string.ascii_uppercase)
+        elif ch == 's':
+            password += random.choice(string.ascii_lowercase)
+        elif ch == 'n':
+            password += random.choice(string.digits)
+        elif ch == '^':
+            symbols = "!@#$%^&*()-_=+[]{}|;:,.<>?/"
+            password += random.choice(symbols)
+        else:
+            password += ch
+    return password
+
+def start_interface():
+    print("مرحبًا بك في أداة كلمات السر pass75!")
+    print("مثال: pass75 create ssaann^^")
+    print("أو أدخل نمط يدوي الآن:")
+    pattern = input("نمط كلمة السر: ")
+    password = generate_password(pattern)
+    print(f"كلمة السر التي تم إنشاؤها: {password}")
+
+def main():
+    if len(sys.argv) < 2:
+        print("أدخل أمرًا (start أو create). مثال:")
+        print("pass75 start")
+        print("pass75 create ssaann^^")
+        sys.exit()
+
+    command = sys.argv[1]
+
+    if command.lower() == "start":
+        start_interface()
+
+    elif command.lower() == "create":
+        if len(sys.argv) < 3:
+            print("يرجى إدخال نمط كلمة السر بعد create.")
+            print("مثال: pass75 create aassnn^^")
+            sys.exit()
+        pattern = sys.argv[2]
+        password = generate_password(pattern)
+        print(password)
+
+    else:
+        print("أمر غير معروف.")
+        print("الأوامر المتاحة: start - create")
+
+if __name__ == "__main__":
+    main()
