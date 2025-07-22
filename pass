@@ -1,0 +1,190 @@
+import random
+import string
+import os
+import csv
+import json
+from cryptography.fernet import Fernet
+
+def generate_password(pattern=None, length=12):
+    if pattern:
+        password = ""
+        for ch in pattern:
+            if ch == 'a':
+                password += random.choice(string.ascii_uppercase)
+            elif ch == 's':
+                password += random.choice(string.ascii_lowercase)
+            elif ch == 'n':
+                password += random.choice(string.digits)
+            elif ch == '^':
+                symbols = "!@#$%^&*()-_=+[]{}|;:,.<>?/"
+                password += random.choice(symbols)
+            else:
+                password += ch
+        return password
+    else:
+        # توليد كلمة سر عشوائية بالكامل
+        all_chars = string.ascii_letters + string.digits + "!@#$%^&*()-_=+[]{}|;:,.<>?/"
+        return ''.join(random.choice(all_chars) for _ in range(length))
+
+def encrypt_password(key, password):
+    f = Fernet(key)
+    return f.encrypt(password.encode()).decode()
+
+def decrypt_password(key, token):
+    f = Fernet(key)
+    return f.decrypt(token.encode()).decode()
+
+def save_password_txt(filename, passwords, key=None):
+    with open(filename, "w", encoding="utf-8") as f:
+        for service, pwd, note in passwords:
+            if key:
+                pwd_enc = encrypt_password(key, pwd)
+            else:
+                pwd_enc = pwd
+            line = f"{service}: {pwd_enc}"
+            if note:
+                line += f"  # {note}"
+            f.write(line + "\n")
+
+def save_password_csv(filename, passwords, key=None):
+    with open(filename, "w", newline='', encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["Service", "Password", "Note"])
+        for service, pwd, note in passwords:
+            if key:
+                pwd_enc = encrypt_password(key, pwd)
+            else:
+                pwd_enc = pwd
+            writer.writerow([service, pwd_enc, note])
+
+def save_password_json(filename, passwords, key=None):
+    data = {}
+    for service, pwd, note in passwords:
+        if key:
+            pwd_enc = encrypt_password(key, pwd)
+        else:
+            pwd_enc = pwd
+        data[service] = {"password": pwd_enc, "note": note}
+    with open(filename, "w", encoding="utf-8") as jsonfile:
+        json.dump(data, jsonfile, indent=4, ensure_ascii=False)
+
+def show_passwords(passwords, key=None):
+    if not passwords:
+        print("لا توجد كلمات سر حتى الآن.")
+        return
+    print("\nكلمات السر الحالية:")
+    for i, (service, pwd, note) in enumerate(passwords, 1):
+        if key:
+            try:
+                pwd_dec = decrypt_password(key, pwd)
+            except:
+                pwd_dec = "<فشل فك التشفير>"
+        else:
+            pwd_dec = pwd
+        note_str = f" (ملاحظة: {note})" if note else ""
+        print(f"{i}. {service}: {pwd_dec}{note_str}")
+
+def main():
+    # إنشاء مفتاح تشفير جديد أو استخدام مفتاح موجود
+    key_file = "secret.key"
+    if os.path.exists(key_file):
+        with open(key_file, "rb") as kf:
+            key = kf.read()
+    else:
+        key = Fernet.generate_key()
+        with open(key_file, "wb") as kf:
+            kf.write(key)
+        print("تم إنشاء مفتاح تشفير جديد وحفظه في secret.key")
+
+    all_passwords = []  # تخزين كلمات السر كقائمة tuples (الخدمة، كلمة السر، ملاحظة)
+
+    while True:
+        print("\n--- قائمة الخيارات ---")
+        print("1 - توليد كلمة سر جديدة")
+        print("2 - توليد كلمة سر عشوائية بدون نمط")
+        print("3 - عرض كلمات السر الحالية")
+        print("4 - حذف كلمة سر")
+        print("5 - حفظ كلمات السر في ملف")
+        print("6 - خروج")
+
+        choice = input("اختيارك: ")
+
+        if choice == "1":
+            service = input("أدخل اسم الخدمة أو الوصف: ")
+            pattern = input("أدخل نمط كلمة السر (a=كبيرة, s=صغيرة, n=رقم, ^=رمز): ")
+            count = input("كم كلمة سر تريد تولد؟ (رقم أو 1): ")
+            note = input("أدخل ملاحظة (اختياري): ")
+            try:
+                count = int(count)
+                if count < 1:
+                    count = 1
+            except:
+                count = 1
+            for i in range(count):
+                pwd = generate_password(pattern)
+                label = service if count == 1 else f"{service} #{i+1}"
+                all_passwords.append((label, pwd, note))
+                print(f"تم توليد كلمة السر لـ '{label}': {pwd}")
+
+        elif choice == "2":
+            length = input("أدخل طول كلمة السر العشوائية (مثلاً 12): ")
+            service = input("أدخل اسم الخدمة أو الوصف: ")
+            note = input("أدخل ملاحظة (اختياري): ")
+            try:
+                length = int(length)
+                if length < 4:
+                    length = 12
+            except:
+                length = 12
+            pwd = generate_password(length=length)
+            all_passwords.append((service, pwd, note))
+            print(f"تم توليد كلمة السر العشوائية لـ '{service}': {pwd}")
+
+        elif choice == "3":
+            show_passwords(all_passwords, key=key)
+
+        elif choice == "4":
+            show_passwords(all_passwords, key=key)
+            to_del = input("أدخل رقم كلمة السر التي تريد حذفها (أو اكتب 0 للإلغاء): ")
+            try:
+                idx = int(to_del)
+                if 1 <= idx <= len(all_passwords):
+                    removed = all_passwords.pop(idx -1)
+                    print(f"تم حذف كلمة السر لـ '{removed[0]}'.")
+                else:
+                    print("إلغاء الحذف أو رقم غير صحيح.")
+            except:
+                print("إلغاء الحذف.")
+
+        elif choice == "5":
+            if not all_passwords:
+                print("لا توجد كلمات سر لحفظها.")
+                continue
+            print("اختر نوع الملف لحفظ كلمات السر:")
+            print("1 - ملف نصي (txt)")
+            print("2 - ملف CSV")
+            print("3 - ملف JSON")
+            file_type = input("اختيارك: ")
+            filename = input("أدخل اسم الملف مع الامتداد المناسب: ")
+
+            if file_type == "1":
+                save_password_txt(filename, all_passwords, key=key)
+            elif file_type == "2":
+                save_password_csv(filename, all_passwords, key=key)
+            elif file_type == "3":
+                save_password_json(filename, all_passwords, key=key)
+            else:
+                print("اختيار غير صحيح، تم حفظ كملف نصي افتراضي.")
+                save_password_txt(filename, all_passwords, key=key)
+
+            print(f"تم حفظ كلمات السر في الملف '{filename}' (مشفرة).")
+
+        elif choice == "6":
+            print("مع السلامة!")
+            break
+
+        else:
+            print("اختيار غير صحيح، حاول مرة أخرى.")
+
+if __name__ == "__main__":
+    main()
